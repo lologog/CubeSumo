@@ -4570,6 +4570,19 @@
 			(justify left bottom)
 		)
 	)
+	(gr_text "CHANGE PADS TO THERMAL RELEASES IN NEXT VERSION!!!"
+		(at 130.556 62.103 0)
+		(layer "F.Fab")
+		(uuid "0602eba3-b19e-495b-8849-6cf6cbb66a73")
+		(effects
+			(font
+				(size 1.5 1.5)
+				(thickness 0.3)
+				(bold yes)
+			)
+			(justify left bottom)
+		)
+	)
 	(gr_text "750mA\n"
 		(at 146.875 69.2 0)
 		(layer "F.Fab")
