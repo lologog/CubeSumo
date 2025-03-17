@@ -8,3 +8,13 @@ PCBs/ConnsBoard/Kicad_MiniSumo_up-backups/
 PCBs/ConnsBoard/fp-info-cache
 PCBs/ConnsBoard/Kicad_MiniSumo_up.kicad_prl
 PCBs/ConnsBoard/~Kicad_MiniSumo_up.kicad_pcb.lck
+
+#STM32
+Firmware/HardwareTest/Drivers/*
+Firmware/HardwareTest/Debug/*
+Firmware/HardwareTest/.metadata/
+Firmware/HardwareTest/.cproject
+Firmware/HardwareTest/.mxproject
+Firmware/HardwareTest/.project
+Firmware/HardwareTest/.settings/
+Firmware/HardwareTest/MiniSumo_TEST Debug.launch
