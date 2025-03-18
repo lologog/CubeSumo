@@ -5,3 +5,4 @@ Minisumo robot built for sumo battles, equipped with multiple sensors for reliab
 ![](Images/CoreBoard-PCB.jpg)
 ![](Images/ConnBoard-PCB.jpg)
 ![](Images/StackedPCBs.jpg)
+![](Images/MiniSumo-3D-Render.jfif)
