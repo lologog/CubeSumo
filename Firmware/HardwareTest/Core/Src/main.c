@@ -33,6 +33,7 @@
 /* USER CODE BEGIN PD */
 #define NUM_SENSORS (9) //how many analog sensors are used in the robot
 #define SOFTWARE_PWM_PERIOD (5) //software PWM period in ticks - the less the fester is the PWM freq
+#define DEBOUNCE_THRESHOLD (5) //number of stable reads required to confirm a new button state
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -63,7 +64,18 @@ typedef struct
 {
     uint32_t channel;
     uint32_t* value_ptr;
-} Sensor;
+} Sensor_t;
+
+//struct that stores info about button state
+typedef struct
+{
+    uint8_t current;          //current debounced button state  <== use this for external usage
+    uint8_t previous;         //previous debounced state
+    uint8_t rising_edge;      //set to 1 for one loop cycle when a press is detected
+    uint8_t falling_edge;     //set to 1 for one loop cycle when a release is detected
+    uint8_t stable_state;     //internal filtered state
+    uint8_t debounce_counter; //counter for debounce filtering
+} ButtonState_t;
 
 //enum representing current motor direction state
 typedef enum {
@@ -87,11 +99,12 @@ Direction_t current_direction = DIR_STOP;
 volatile uint8_t pwm_left = 0;
 volatile uint8_t pwm_right = 0;
 
-//button
-uint8_t button_value = 0;
+//button state
+ButtonState_t button = {0};
 
 //array that maps ADC channels to their corresponding sensor value variables
-Sensor sensors[NUM_SENSORS] = {
+Sensor_t sensors[NUM_SENSORS] =
+{
     {ADC_CHANNEL_16, &adc_value_1},
     {ADC_CHANNEL_11, &adc_value_2},
     {ADC_CHANNEL_12, &adc_value_3},
@@ -301,6 +314,43 @@ void LEDsOnOff(uint8_t state)
 		HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin, GPIO_PIN_SET);
 	}
 }
+
+//calculates the button state including filtering
+void UpdateButtonState(void)
+{
+    //read raw button input
+    uint8_t raw_state = (HAL_GPIO_ReadPin(BTN_GPIO_Port, BTN_Pin) == GPIO_PIN_RESET) ? 1 : 0;
+
+    //check if the raw state differs from the last confirmed stable state
+    if (raw_state != button.stable_state)
+    {
+        //count how many times this new state was seen consecutively
+        button.debounce_counter++;
+
+        //if new state was long enough then accept it
+        if (button.debounce_counter >= DEBOUNCE_THRESHOLD)
+        {
+            button.previous = button.stable_state;
+            button.stable_state = raw_state;
+
+            //edge detection
+            button.rising_edge  = (button.previous == 0 && button.stable_state == 1);
+            button.falling_edge = (button.previous == 1 && button.stable_state == 0);
+        }
+    }
+    else
+    {
+        //reset debounce counter if state is sure
+        button.debounce_counter = 0;
+
+        //reset edge flags
+        button.rising_edge = 0;
+        button.falling_edge = 0;
+    }
+
+    //save debounced state for external use
+    button.current = button.stable_state;
+}
 /* USER CODE END 0 */
 
 /**
@@ -343,22 +393,16 @@ int main(void)
   while (1)
   {
 	  UpdateAllSensors();
+	  UpdateButtonState();
 
-	  LEDsOnOff(1);
-	  HAL_Delay(1000);
-	  LEDsOnOff(0);
-	  HAL_Delay(1000);
-
-      if (HAL_GPIO_ReadPin(BTN_GPIO_Port, BTN_Pin) == GPIO_PIN_RESET)
-      {
-    	  button_value = 1;
-    	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-      }
-      else
-      {
-    	  button_value = 0;
-    	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
-      }
+	  if (button.current == 0)
+	  {
+		  LEDsOnOff(0);
+	  }
+	  else
+	  {
+		  LEDsOnOff(1);
+	  }
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
