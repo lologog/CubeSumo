@@ -18,3 +18,7 @@ Firmware/HardwareTest/.mxproject
 Firmware/HardwareTest/.project
 Firmware/HardwareTest/.settings/
 Firmware/HardwareTest/MiniSumo_TEST Debug.launch
+Firmware/HardwareTest/HardwareTest Debug.launch
+
+#SVN reporistory
+*.gitignore

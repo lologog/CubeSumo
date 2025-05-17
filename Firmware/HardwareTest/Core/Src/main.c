@@ -31,7 +31,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define NUM_SENSORS (9) //how many analog sensors are used in the robot
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -56,17 +56,34 @@ static void MX_ADC1_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint32_t adc_value_1 = 0;
-uint32_t adc_value_2 = 0;
-uint32_t adc_value_3 = 0;
-uint32_t adc_value_4 = 0;
-uint32_t adc_value_5 = 0;
-uint32_t adc_value_6 = 0;
-uint32_t adc_value_7 = 0;
-uint32_t adc_value_8 = 0;
-uint32_t adc_value_9 = 0;
+
+//variables used to store analog values read from sensors
+uint32_t adc_value_1, adc_value_2, adc_value_3, adc_value_4;
+uint32_t adc_value_5, adc_value_6, adc_value_7, adc_value_8, adc_value_9;
+
 uint8_t button_value = 0;
 
+//struct that associates an ADC channel with a pointer to its output variable
+typedef struct
+{
+    uint32_t channel;
+    uint32_t* value_ptr;
+} Sensor;
+
+//array that maps ADC channels to their corresponding sensor value variables
+Sensor sensors[NUM_SENSORS] = {
+    {ADC_CHANNEL_16, &adc_value_1},
+    {ADC_CHANNEL_11, &adc_value_2},
+    {ADC_CHANNEL_12, &adc_value_3},
+    {ADC_CHANNEL_7,  &adc_value_4},
+    {ADC_CHANNEL_15, &adc_value_5},
+    {ADC_CHANNEL_9,  &adc_value_6},
+    {ADC_CHANNEL_6,  &adc_value_7},
+    {ADC_CHANNEL_5,  &adc_value_8},
+    {ADC_CHANNEL_8,  &adc_value_9}
+};
+
+//selects the specified ADC channel and prepares it for conversion
 void ADC_SetActiveChannel(ADC_HandleTypeDef *hadc, uint32_t AdcChannel)
 {
   ADC_ChannelConfTypeDef sConfig = {0};
@@ -77,6 +94,22 @@ void ADC_SetActiveChannel(ADC_HandleTypeDef *hadc, uint32_t AdcChannel)
   {
    Error_Handler();
   }
+}
+
+//reads values from all configured ADC channels and stores the results
+void UpdateAllSensors(void)
+{
+    for (int i = 0; i < NUM_SENSORS; i++)
+    {
+        ADC_SetActiveChannel(&hadc1, sensors[i].channel);
+        HAL_ADC_Start(&hadc1);
+
+        if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
+        {
+        	//store the value directly in the variable pointed to by the sensor
+            *(sensors[i].value_ptr) = HAL_ADC_GetValue(&hadc1);
+        }
+    }
 }
 /* USER CODE END 0 */
 
@@ -119,6 +152,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  UpdateAllSensors();
+
 	  HAL_GPIO_WritePin(EN_LEFT_GPIO_Port, EN_LEFT_Pin, GPIO_PIN_SET);
 	  HAL_GPIO_WritePin(PHASE_LEFT_GPIO_Port, PHASE_LEFT_Pin, GPIO_PIN_SET);
 
@@ -134,91 +169,25 @@ int main(void)
 	  HAL_GPIO_WritePin(PHASE_RIGHT_GPIO_Port, PHASE_RIGHT_Pin, GPIO_PIN_RESET);
 
 	  HAL_Delay(3000);
-	  /* Start ADC Conversion */
-	  if(HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
-	      {
-	        adc_value_1 = HAL_ADC_GetValue(&hadc1); // Get X value
-	        ADC_SetActiveChannel(&hadc1, ADC_CHANNEL_16);
-	        HAL_ADC_Start(&hadc1);
-	      }
 
-	      if(HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
-	      {
-	        adc_value_2 = HAL_ADC_GetValue(&hadc1); // Get Y value
-	        ADC_SetActiveChannel(&hadc1, ADC_CHANNEL_11);
-	        HAL_ADC_Start(&hadc1);
-	      }
+	  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+	  HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
+	  HAL_GPIO_WritePin(LED3_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+	  HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin, GPIO_PIN_RESET);
 
-	      if(HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
-	      {
-	        adc_value_3 = HAL_ADC_GetValue(&hadc1); // Get Y value
-	        ADC_SetActiveChannel(&hadc1, ADC_CHANNEL_12);
-	        HAL_ADC_Start(&hadc1);
-	      }
+      if (HAL_GPIO_ReadPin(BTN_GPIO_Port, BTN_Pin) == GPIO_PIN_RESET)
+      {
+    	  button_value = 1;
+    	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+      }
+      else
+      {
+    	  button_value = 0;
+    	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+      }
+  /* USER CODE END WHILE */
 
-	      if(HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
-	      {
-	        adc_value_4 = HAL_ADC_GetValue(&hadc1); // Get Y value
-	        ADC_SetActiveChannel(&hadc1, ADC_CHANNEL_7);
-	        HAL_ADC_Start(&hadc1);
-	      }
-
-	      if(HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
-	      {
-	        adc_value_5 = HAL_ADC_GetValue(&hadc1); // Get Y value
-	        ADC_SetActiveChannel(&hadc1, ADC_CHANNEL_15);
-	        HAL_ADC_Start(&hadc1);
-	      }
-
-	      if(HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
-	      {
-	        adc_value_6 = HAL_ADC_GetValue(&hadc1); // Get Y value
-	        ADC_SetActiveChannel(&hadc1, ADC_CHANNEL_9);
-	        HAL_ADC_Start(&hadc1);
-	      }
-
-	      if(HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
-	      {
-	        adc_value_7 = HAL_ADC_GetValue(&hadc1); // Get Y value
-	        ADC_SetActiveChannel(&hadc1, ADC_CHANNEL_6);
-	        HAL_ADC_Start(&hadc1);
-	      }
-
-	      if(HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
-	      {
-	        adc_value_8 = HAL_ADC_GetValue(&hadc1); // Get Y value
-	        ADC_SetActiveChannel(&hadc1, ADC_CHANNEL_5);
-	        HAL_ADC_Start(&hadc1);
-	      }
-
-	      if(HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
-	      {
-	        adc_value_9 = HAL_ADC_GetValue(&hadc1); // Get Y value
-	        ADC_SetActiveChannel(&hadc1, ADC_CHANNEL_8);
-	        HAL_ADC_Start(&hadc1);
-	      }
-
-	      HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
-	      HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
-	      HAL_GPIO_WritePin(LED3_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
-	      HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin, GPIO_PIN_RESET);
-
-	      if (HAL_GPIO_ReadPin(BTN_GPIO_Port, BTN_Pin) == GPIO_PIN_RESET)
-	      {
-	    	  button_value = 1;
-	    	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-	      }
-	      else
-	      {
-	    	  button_value = 0;
-	    	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
-	      }
-
-
-
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
+  /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
 }
