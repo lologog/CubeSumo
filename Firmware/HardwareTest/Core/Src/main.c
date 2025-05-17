@@ -32,6 +32,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define NUM_SENSORS (9) //how many analog sensors are used in the robot
+#define SOFTWARE_PWM_PERIOD (5) //software PWM period in ticks - the less the fester is the PWM freq
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -57,18 +58,37 @@ static void MX_ADC1_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-//variables used to store analog values read from sensors
-uint32_t adc_value_1, adc_value_2, adc_value_3, adc_value_4;
-uint32_t adc_value_5, adc_value_6, adc_value_7, adc_value_8, adc_value_9;
-
-uint8_t button_value = 0;
-
 //struct that associates an ADC channel with a pointer to its output variable
 typedef struct
 {
     uint32_t channel;
     uint32_t* value_ptr;
 } Sensor;
+
+//enum representing current motor direction state
+typedef enum {
+    DIR_STOP,
+    DIR_FORWARD,
+    DIR_BACKWARD,
+    DIR_LEFT,
+    DIR_RIGHT
+} Direction_t;
+
+//variables used to store analog values read from sensors
+uint32_t adc_value_1, adc_value_2, adc_value_3, adc_value_4;
+uint32_t adc_value_5, adc_value_6, adc_value_7, adc_value_8, adc_value_9;
+
+static uint8_t pwm_counter = 0; //PWM counter incremented every 1ms from SysTick
+
+//variable tracking current movement direction
+Direction_t current_direction = DIR_STOP;
+
+//global variables storing duty cycle 0-100% for left and right motors
+volatile uint8_t pwm_left = 0;
+volatile uint8_t pwm_right = 0;
+
+//button
+uint8_t button_value = 0;
 
 //array that maps ADC channels to their corresponding sensor value variables
 Sensor sensors[NUM_SENSORS] = {
@@ -92,7 +112,7 @@ void ADC_SetActiveChannel(ADC_HandleTypeDef *hadc, uint32_t AdcChannel)
   sConfig.SamplingTime = ADC_SAMPLETIME_12CYCLES_5;
   if (HAL_ADC_ConfigChannel(hadc, &sConfig) != HAL_OK)
   {
-   Error_Handler();
+	  Error_Handler();
   }
 }
 
@@ -111,6 +131,158 @@ void UpdateAllSensors(void)
         }
     }
 }
+
+//stops both motors by disabling the enable pins
+void StopMotors(void)
+{
+    HAL_GPIO_WritePin(EN_LEFT_GPIO_Port, EN_LEFT_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(EN_RIGHT_GPIO_Port, EN_RIGHT_Pin, GPIO_PIN_RESET);
+    pwm_left = 0;
+    pwm_right = 0;
+    current_direction = DIR_STOP;
+}
+
+//stops motors briefly if direction is changing to avoid shoot-through
+void SafeDirectionChange(Direction_t new_dir)
+{
+    if (current_direction != DIR_STOP && current_direction != new_dir)
+    {
+        StopMotors();
+        HAL_Delay(100); //dead time to allow safe switching
+    }
+}
+
+//moves robot forward at specified speed (0–100%)
+void MoveBack(uint8_t speed_percent)
+{
+    SafeDirectionChange(DIR_FORWARD);
+
+    HAL_GPIO_WritePin(PHASE_LEFT_GPIO_Port, PHASE_LEFT_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(PHASE_RIGHT_GPIO_Port, PHASE_RIGHT_Pin, GPIO_PIN_SET);
+
+    uint8_t duty;
+
+    if (speed_percent > 100)
+    {
+        duty = SOFTWARE_PWM_PERIOD;
+    }
+    else
+    {
+        duty = (speed_percent * SOFTWARE_PWM_PERIOD) / 100;
+    }
+
+    pwm_left = duty;
+    pwm_right = duty;
+
+    current_direction = DIR_FORWARD;
+}
+
+//moves robot backward at specified speed (0–100%)
+void MoveForward(uint8_t speed_percent)
+{
+    SafeDirectionChange(DIR_BACKWARD);
+
+    HAL_GPIO_WritePin(PHASE_LEFT_GPIO_Port, PHASE_LEFT_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(PHASE_RIGHT_GPIO_Port, PHASE_RIGHT_Pin, GPIO_PIN_RESET);
+
+    uint8_t duty;
+
+    if (speed_percent > 100)
+    {
+        duty = SOFTWARE_PWM_PERIOD;
+    }
+    else
+    {
+        duty = (speed_percent * SOFTWARE_PWM_PERIOD) / 100;
+    }
+
+    pwm_left = duty;
+    pwm_right = duty;
+
+    current_direction = DIR_BACKWARD;
+}
+
+//spins robot left so it turns in place at specified speed
+void TurnLeft(uint8_t speed_percent)
+{
+    SafeDirectionChange(DIR_LEFT);
+
+    HAL_GPIO_WritePin(PHASE_LEFT_GPIO_Port, PHASE_LEFT_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(PHASE_RIGHT_GPIO_Port, PHASE_RIGHT_Pin, GPIO_PIN_SET);
+
+    uint8_t duty;
+
+    if (speed_percent > 100)
+    {
+        duty = SOFTWARE_PWM_PERIOD;
+    }
+    else
+    {
+        duty = (speed_percent * SOFTWARE_PWM_PERIOD) / 100;
+    }
+
+    pwm_left = duty;
+    pwm_right = duty;
+
+    current_direction = DIR_LEFT;
+}
+
+//spins robot right so it turns in place at specified speed
+void TurnRight(uint8_t speed_percent)
+{
+    SafeDirectionChange(DIR_RIGHT);
+
+    HAL_GPIO_WritePin(PHASE_LEFT_GPIO_Port, PHASE_LEFT_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(PHASE_RIGHT_GPIO_Port, PHASE_RIGHT_Pin, GPIO_PIN_RESET);
+
+    uint8_t duty;
+
+    if (speed_percent > 100)
+    {
+        duty = SOFTWARE_PWM_PERIOD;
+    }
+    else
+    {
+        duty = (speed_percent * SOFTWARE_PWM_PERIOD) / 100;
+    }
+
+    pwm_left = duty;
+    pwm_right = duty;
+
+    current_direction = DIR_RIGHT;
+}
+
+//software based PWM controller - should be called every 1ms from SysTick_Handler :)
+void SoftwarePWM_Loop(void)
+{
+    pwm_counter++;
+    if (pwm_counter >= SOFTWARE_PWM_PERIOD)
+    {
+    	pwm_counter = 0;
+    }
+
+
+    //left motor PWM
+    if (pwm_counter < pwm_left)
+    {
+    	HAL_GPIO_WritePin(EN_LEFT_GPIO_Port, EN_LEFT_Pin, GPIO_PIN_SET);
+    }
+    else
+    {
+    	HAL_GPIO_WritePin(EN_LEFT_GPIO_Port, EN_LEFT_Pin, GPIO_PIN_RESET);
+    }
+
+    //right motor PWM
+    if (pwm_counter < pwm_right)
+    {
+    	HAL_GPIO_WritePin(EN_RIGHT_GPIO_Port, EN_RIGHT_Pin, GPIO_PIN_SET);
+    }
+    else
+    {
+    	HAL_GPIO_WritePin(EN_RIGHT_GPIO_Port, EN_RIGHT_Pin, GPIO_PIN_RESET);
+    }
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -154,21 +326,7 @@ int main(void)
   {
 	  UpdateAllSensors();
 
-	  HAL_GPIO_WritePin(EN_LEFT_GPIO_Port, EN_LEFT_Pin, GPIO_PIN_SET);
-	  HAL_GPIO_WritePin(PHASE_LEFT_GPIO_Port, PHASE_LEFT_Pin, GPIO_PIN_SET);
-
-	  HAL_GPIO_WritePin(EN_RIGHT_GPIO_Port, EN_RIGHT_Pin, GPIO_PIN_SET);
-	  HAL_GPIO_WritePin(PHASE_RIGHT_GPIO_Port, PHASE_RIGHT_Pin, GPIO_PIN_SET);
-
-	  HAL_Delay(3000);
-
-	  HAL_GPIO_WritePin(EN_LEFT_GPIO_Port, EN_LEFT_Pin, GPIO_PIN_SET);
-	  HAL_GPIO_WritePin(PHASE_LEFT_GPIO_Port, PHASE_LEFT_Pin, GPIO_PIN_RESET);
-
-	  HAL_GPIO_WritePin(EN_RIGHT_GPIO_Port, EN_RIGHT_Pin, GPIO_PIN_SET);
-	  HAL_GPIO_WritePin(PHASE_RIGHT_GPIO_Port, PHASE_RIGHT_Pin, GPIO_PIN_RESET);
-
-	  HAL_Delay(3000);
+	  MoveForward(20); //this is minimum
 
 	  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
 	  HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
