@@ -59,6 +59,14 @@ static void MX_ADC1_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+//Enum for all states in state machine
+typedef enum
+{
+    STATE_IDLE,
+    STATE_WAIT_FOR_START,
+    STATE_FIGHT
+} RobotState_t;
+
 //struct that associates an ADC channel with a pointer to its output variable
 typedef struct
 {
@@ -101,6 +109,9 @@ volatile uint8_t pwm_right = 0;
 
 //button state
 ButtonState_t button = {0};
+
+//holder for current state in state machine
+RobotState_t current_state = STATE_IDLE;
 
 //array that maps ADC channels to their corresponding sensor value variables
 Sensor_t sensors[NUM_SENSORS] =
@@ -395,14 +406,27 @@ int main(void)
 	  UpdateAllSensors();
 	  UpdateButtonState();
 
-	  if (button.current == 0)
+	  //STATE MACHINE
+	  switch (current_state)
 	  {
+	  case STATE_IDLE:
+		  //here we put logic for one state
 		  LEDsOnOff(0);
-	  }
-	  else
-	  {
+		  StopMotors();
+
+		  //here we check conditions when we want to go to the next state
+		  if (button.rising_edge)
+		  {
+			  current_state = STATE_WAIT_FOR_START;
+		  }
+		  break;
+	  case STATE_WAIT_FOR_START:
+		  //......logic........
 		  LEDsOnOff(1);
+		  //......conditions........
+		  break;
 	  }
+
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
