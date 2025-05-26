@@ -44,14 +44,18 @@
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
 
+RNG_HandleTypeDef hrng;
+
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void PeriphCommonClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
+static void MX_RNG_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -63,7 +67,7 @@ static void MX_ADC1_Init(void);
 typedef enum
 {
     STATE_IDLE,
-    STATE_WAIT_FOR_START,
+    STATE_SEARCH,
     STATE_FIGHT
 } RobotState_t;
 
@@ -126,6 +130,12 @@ Sensor_t sensors[NUM_SENSORS] =
     {ADC_CHANNEL_5,  &adc_value_8},
     {ADC_CHANNEL_8,  &adc_value_9}
 };
+
+//variables defining detection of white line
+uint8_t lineDetected_Left=0, lineDetected_Right=0;
+
+//variable for storage time of start
+uint32_t start_Time=0;
 
 //selects the specified ADC channel and prepares it for conversion
 void ADC_SetActiveChannel(ADC_HandleTypeDef *hadc, uint32_t AdcChannel)
@@ -362,6 +372,45 @@ void UpdateButtonState(void)
     //save debounced state for external use
     button.current = button.stable_state;
 }
+
+void hendleLineDetect(uint8_t min_time, uint8_t max_time){
+	//Times of manuvers in ms
+	uint8_t reatreat_Time = 70;
+	uint8_t turning_Time = 100;
+
+	//RN holder
+	uint32_t rng_holder = 0;
+
+	uint32_t executingTime = HAL_GetTick() - start_Time;
+
+	//Checks values of light sensors to check line on left side
+	if(adc_value_9 > 12 || adc_value_8 >12){lineDetected_Left = 1;}
+	//Checks values of light sensors to check line on right side
+	if(adc_value_6 > 12 || adc_value_7 >12){lineDetected_Right = 1;}
+	//If line is detected and there is no active reatret or turns start step back
+	if(lineDetected_Left || lineDetected_Right){
+		if(!start_Time)
+		{
+			start_Time = HAL_GetTick();
+			if(HAL_RNG_GenerateRandomNumber(&hrng, &rng_holder) == HAL_OK){}
+			turning_Time = rng_holder%(max_time - min_time) + min_time;
+		}
+		if(executingTime < reatreat_Time)
+		{
+			MoveBack(50);
+		}
+		if(executingTime > reatreat_Time && executingTime < (reatreat_Time + turning_Time))
+		{
+			if(lineDetected_Left ){ TurnRight(50);}
+			if(lineDetected_Right){ TurnLeft(50) ;}
+		}
+		if(executingTime > (reatreat_Time + turning_Time)){
+			start_Time = 0;
+			lineDetected_Left = 0;
+			lineDetected_Right = 0;
+		}
+	}
+}
 /* USER CODE END 0 */
 
 /**
@@ -387,6 +436,9 @@ int main(void)
   /* Configure the system clock */
   SystemClock_Config();
 
+  /* Configure the peripherals common clocks */
+  PeriphCommonClock_Config();
+
   /* USER CODE BEGIN SysInit */
 
   /* USER CODE END SysInit */
@@ -394,6 +446,7 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_ADC1_Init();
+  MX_RNG_Init();
   /* USER CODE BEGIN 2 */
   HAL_ADC_Start(&hadc1);
 
@@ -411,25 +464,32 @@ int main(void)
 	  {
 	  case STATE_IDLE:
 		  //here we put logic for one state
-		  LEDsOnOff(0);
+		  LEDsOnOff(1);
 		  StopMotors();
 
 		  //here we check conditions when we want to go to the next state
 		  if (button.rising_edge)
 		  {
-			  current_state = STATE_WAIT_FOR_START;
+			  current_state = STATE_SEARCH;
 		  }
 		  break;
-	  case STATE_WAIT_FOR_START:
+	  case STATE_SEARCH:
 		  //......logic........
+		  MoveForward(50);
 		  LEDsOnOff(1);
+		  hendleLineDetect(60,120);
 		  //......conditions........
+		  for(int i = 0; i < 5; i++){
+			  if(*(sensors[i].value_ptr) > 1000){
+				  current_state = STATE_FIGHT;
+			  }
+		  }
 		  break;
 	  }
 
-  /* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
-  /* USER CODE BEGIN 3 */
+    /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
 }
@@ -495,6 +555,32 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief Peripherals Common Clock Configuration
+  * @retval None
+  */
+void PeriphCommonClock_Config(void)
+{
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+
+  /** Initializes the peripherals clock
+  */
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RNG|RCC_PERIPHCLK_ADC;
+  PeriphClkInit.AdcClockSelection = RCC_ADCCLKSOURCE_PLLSAI1;
+  PeriphClkInit.RngClockSelection = RCC_RNGCLKSOURCE_PLLSAI1;
+  PeriphClkInit.PLLSAI1.PLLSAI1Source = RCC_PLLSOURCE_MSI;
+  PeriphClkInit.PLLSAI1.PLLSAI1M = 1;
+  PeriphClkInit.PLLSAI1.PLLSAI1N = 16;
+  PeriphClkInit.PLLSAI1.PLLSAI1P = RCC_PLLP_DIV7;
+  PeriphClkInit.PLLSAI1.PLLSAI1Q = RCC_PLLQ_DIV2;
+  PeriphClkInit.PLLSAI1.PLLSAI1R = RCC_PLLR_DIV2;
+  PeriphClkInit.PLLSAI1.PLLSAI1ClockOut = RCC_PLLSAI1_48M2CLK|RCC_PLLSAI1_ADC1CLK;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/**
   * @brief ADC1 Initialization Function
   * @param None
   * @retval None
@@ -549,6 +635,32 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief RNG Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_RNG_Init(void)
+{
+
+  /* USER CODE BEGIN RNG_Init 0 */
+
+  /* USER CODE END RNG_Init 0 */
+
+  /* USER CODE BEGIN RNG_Init 1 */
+
+  /* USER CODE END RNG_Init 1 */
+  hrng.Instance = RNG;
+  if (HAL_RNG_Init(&hrng) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN RNG_Init 2 */
+
+  /* USER CODE END RNG_Init 2 */
 
 }
 
