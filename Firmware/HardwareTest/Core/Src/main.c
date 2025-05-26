@@ -99,8 +99,8 @@ typedef enum {
 } Direction_t;
 
 //variables used to store analog values read from sensors
-uint32_t adc_value_1, adc_value_2, adc_value_3, adc_value_4;
-uint32_t adc_value_5, adc_value_6, adc_value_7, adc_value_8, adc_value_9;
+uint32_t dist_front_right_value, dist_side_right_value, dist_front_middle_value, dist_front_left_value;
+uint32_t dist_side_left_value, light_front_right_value, light_back_right_value, light_front_left_value, light_back_left_value;
 
 static uint8_t pwm_counter = 0; //PWM counter incremented every 1ms from SysTick
 
@@ -120,19 +120,22 @@ RobotState_t current_state = STATE_IDLE;
 //array that maps ADC channels to their corresponding sensor value variables
 Sensor_t sensors[NUM_SENSORS] =
 {
-    {ADC_CHANNEL_16, &adc_value_1},
-    {ADC_CHANNEL_11, &adc_value_2},
-    {ADC_CHANNEL_12, &adc_value_3},
-    {ADC_CHANNEL_7,  &adc_value_4},
-    {ADC_CHANNEL_15, &adc_value_5},
-    {ADC_CHANNEL_9,  &adc_value_6},
-    {ADC_CHANNEL_6,  &adc_value_7},
-    {ADC_CHANNEL_5,  &adc_value_8},
-    {ADC_CHANNEL_8,  &adc_value_9}
+    {ADC_CHANNEL_16, &dist_front_right_value},
+    {ADC_CHANNEL_11, &dist_side_right_value},
+    {ADC_CHANNEL_12, &dist_front_middle_value},
+    {ADC_CHANNEL_7,  &dist_front_left_value},
+    {ADC_CHANNEL_15, &dist_side_left_value},
+    {ADC_CHANNEL_9,  &light_front_right_value},
+    {ADC_CHANNEL_6,  &light_back_right_value},
+    {ADC_CHANNEL_5,  &light_front_left_value},
+    {ADC_CHANNEL_8,  &light_back_left_value}
 };
 
 //variables defining detection of white line
 uint8_t lineDetected_Left=0, lineDetected_Right=0;
+
+//temporary variable for defining distance sensor range
+uint32_t temp_sensorRange = 1000;
 
 //variable for storage time of start
 uint32_t start_Time=0;
@@ -384,9 +387,9 @@ void hendleLineDetect(uint8_t min_time, uint8_t max_time){
 	uint32_t executingTime = HAL_GetTick() - start_Time;
 
 	//Checks values of light sensors to check line on left side
-	if(adc_value_9 > 12 || adc_value_8 >12){lineDetected_Left = 1;}
+	if( light_front_left_value >12 ){ lineDetected_Left = 1;}
 	//Checks values of light sensors to check line on right side
-	if(adc_value_6 > 12 || adc_value_7 >12){lineDetected_Right = 1;}
+	if( light_front_right_value > 12 ){ lineDetected_Right = 1;}
 	//If line is detected and there is no active reatret or turns start step back
 	if(lineDetected_Left || lineDetected_Right){
 		if(!start_Time)
@@ -409,6 +412,54 @@ void hendleLineDetect(uint8_t min_time, uint8_t max_time){
 			lineDetected_Left = 0;
 			lineDetected_Right = 0;
 		}
+	}
+}
+uint8_t enemy_localization(){
+	if(dist_side_left_value > temp_sensorRange && dist_front_left_value > temp_sensorRange){return 1;}
+	if(dist_front_left_value > temp_sensorRange){return 2;}
+	if(dist_front_left_value > temp_sensorRange && dist_front_middle_value > temp_sensorRange){return 3;}
+	if(dist_front_middle_value > temp_sensorRange){return 4;}
+	if(dist_front_middle_value > temp_sensorRange && dist_front_right_value > temp_sensorRange){return 5;}
+	if(dist_front_left_value > temp_sensorRange){return 6;}
+	if(dist_front_right_value > temp_sensorRange && dist_side_right_value > temp_sensorRange){return 7;}
+	if(dist_front_left_value > temp_sensorRange && dist_front_middle_value > temp_sensorRange && dist_front_right_value > temp_sensorRange){return 8;}
+	if(dist_side_left_value > temp_sensorRange){return 9;}
+	if(dist_side_right_value > temp_sensorRange){return 10;}
+}
+void circural_offence(uint8_t enemy_zone){
+	switch(enemy_zone)
+	{
+	case 1:
+
+		break;
+	case 2:
+
+		break;
+	case 3:
+
+		break;
+	case 4:
+
+		break;
+	case 5:
+
+		break;
+	case 6:
+
+		break;
+	case 7:
+
+		break;
+	case 8:
+
+		break
+	case 9:
+
+		break;
+	case 10:
+
+		break;
+
 	}
 }
 /* USER CODE END 0 */
@@ -480,8 +531,20 @@ int main(void)
 		  hendleLineDetect(60,120);
 		  //......conditions........
 		  for(int i = 0; i < 5; i++){
-			  if(*(sensors[i].value_ptr) > 1000){
+			  if(*(sensors[i].value_ptr) > temp_sensorRange){
 				  current_state = STATE_FIGHT;
+			  }
+		  }
+		  break;
+	  case STATE_FIGHT:
+		  //......logic........
+		  uint8_t enemyZone = enemy_localization();
+		  circural_offence(enemyZone);
+		  hendleLineDetect(30, 50);
+		  //......conditions........
+		  for(int i = 0; i < 5; i++){
+			  if(*(sensors[i].value_ptr) < temp_sensorRange){
+				  current_state = STATE_SEARCH;
 			  }
 		  }
 		  break;
